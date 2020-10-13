@@ -1,0 +1,23 @@
+--- a/modules/js/src/make_umd.py
++++ b/modules/js/src/make_umd.py
+@@ -70,8 +70,8 @@ import os, sys, re, json, shutil
+ from subprocess import Popen, PIPE, STDOUT
+ 
+ def make_umd(opencvjs, cvjs):
+-    src = open(opencvjs, 'r+b')
+-    dst = open(cvjs, 'w+b')
++    src = open(opencvjs, 'r')
++    dst = open(cvjs, 'w')
+     content = src.read()
+     dst.seek(0)
+     # inspired by https://github.com/umdjs/umd/blob/95563fd6b46f06bda0af143ff67292e7f6ede6b7/templates/returnExportsGlobal.js
+diff --git a/platforms/js/opencv_js.config.py b/platforms/js/opencv_js.config.py
+index 72efd46faf..1010d6be32 100644
+--- a/platforms/js/opencv_js.config.py
++++ b/platforms/js/opencv_js.config.py
+@@ -79,4 +79,4 @@ aruco = {'': ['detectMarkers', 'drawDetectedMarkers', 'drawAxis', 'estimatePoseS
+ calib3d = {'': ['findHomography', 'calibrateCameraExtended', 'drawFrameAxes', 'estimateAffine2D', 'getDefaultNewCameraMatrix', 'initUndistortRectifyMap', 'Rodrigues']}
+ 
+ 
+-white_list = makeWhiteList([core, imgproc, objdetect, video, dnn, features2d, photo, aruco, calib3d])
++white_list = makeWhiteList([core, imgproc, features2d])

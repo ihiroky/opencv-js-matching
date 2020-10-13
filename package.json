@@ -1,0 +1,13 @@
+{
+  "name": "opencv-js-matching",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "build": "tsc -b && node build/copy_to_dist.js"
+  },
+  "devDependencies": {
+    "typescript": "^4.0.3"
+  }
+}
