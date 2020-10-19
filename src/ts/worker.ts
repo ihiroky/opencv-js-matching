@@ -2,6 +2,11 @@ importScripts('./opencv.js')
 
 declare const cv: () => Promise<OpenCVObject>
 
+type PointPair = {
+  p0: Point,
+  p1: Point
+}
+
 cv().then(cv => {
   addEventListener('message', (e: MessageEvent): void => {
     const data = e.data as { type: string, target: ImageData, whole: ImageData }
@@ -17,13 +22,23 @@ cv().then(cv => {
   console.log('worker is initialized.')
 })
 
+function squaredDistance(p0: Point, p1: Point): number {
+  const dx = p0.x - p1.x
+  const dy = p0.y - p1.y
+  return dx * dx + dy * dy
+}
+
+function isClose(n0: number, n1: number): boolean {
+  return Math.abs(n0 - n1) < 1e-6
+}
+
 function searchFarthestPoints(
   target: ImageData,
   whole: ImageData,
   kp1: KeyPointVector,
   kp2: KeyPointVector,
   good: DMatchVectorVector
-): { p1: Point, p2: Point }[] {
+): { target: PointPair, whole: PointPair } {
   if (good.size() <= 1) {
     throw new Error('Not enough good points.')
   }
@@ -60,28 +75,52 @@ function searchFarthestPoints(
     }
   }
   let maxSquaredDistance = 0
-  let maxSdIndexPair: { i1: number, i2: number } = { i1: 0, i2: 0 }
+  let maxSdIndexPair: { i0: number, i1: number } = { i0: 0, i1: 0 }
   for (let i = 0; i < tlbr.length; i++) {
     for (let ii = i + 1; ii < tlbr.length; ii++) {
-      const p1 = tlbr[i].p
-      const p2 = tlbr[ii].p
-      const sd = (p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2
+      const p0 = tlbr[i].p
+      const p1 = tlbr[ii].p
+      const sd = squaredDistance(p0, p1)
+      // const sd = (p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2
       if (sd > maxSquaredDistance) {
         maxSquaredDistance = sd
-        maxSdIndexPair = { i1: i, i2: ii }
+        maxSdIndexPair = { i0: i, i1: ii }
       }
     }
   }
-  return [
-    {
-      p1: kp1.get(tlbr[maxSdIndexPair.i1].qi).pt,
-      p2: kp1.get(tlbr[maxSdIndexPair.i2].qi).pt
+  return {
+    target: {
+      p0: kp1.get(tlbr[maxSdIndexPair.i0].qi).pt,
+      p1: kp1.get(tlbr[maxSdIndexPair.i1].qi).pt
     },
-    {
-      p1: kp2.get(tlbr[maxSdIndexPair.i1].ti).pt,
-      p2: kp2.get(tlbr[maxSdIndexPair.i2].ti).pt
-    },
-  ]
+    whole: {
+      p0: kp2.get(tlbr[maxSdIndexPair.i0].ti).pt,
+      p1: kp2.get(tlbr[maxSdIndexPair.i1].ti).pt
+    }
+  }
+}
+
+function calcBox(
+  target: ImageData,
+  targetPointPair: PointPair,
+  wholePointPair: PointPair
+): { top: number, left: number, width: number, height: number } {
+  const targetDistance = squaredDistance(targetPointPair.p0, targetPointPair.p1)
+  const wholeDistance = squaredDistance(wholePointPair.p0, wholePointPair.p1)
+  const ratio = wholeDistance / targetDistance
+  return isClose(ratio, 0)
+  ? {
+    top: wholePointPair.p0.y - targetPointPair.p0.y,
+    left: wholePointPair.p0.x - targetPointPair.p0.x,
+    width: target.width,
+    height: target.height
+  }
+  : {
+    top: wholePointPair.p0.y - targetPointPair.p0.y * ratio,
+    left: wholePointPair.p0.x - targetPointPair.p0.x * ratio,
+    width: target.width * ratio,
+    height: target.height * ratio
+  }
 }
 
 function match(cv: OpenCVObject, target: ImageData, whole: ImageData): void {
@@ -121,8 +160,10 @@ function match(cv: OpenCVObject, target: ImageData, whole: ImageData): void {
   cv.drawMatchesKnn(targetImage, kp1, wholeImage, kp2, good, matchingImage)
 
   const ps = searchFarthestPoints(target, whole, kp1, kp2, good)
-  console.log('The farthest points of target', ps[0])
-  console.log('The farthest points of whole', ps[1])
+  console.log('The farthest points of target', ps.target)
+  console.log('The farthest points of whole', ps.whole)
+  const boxOnWhole = calcBox(target, ps.target, ps.whole)
+  console.log('Box on whole', boxOnWhole)
 
   const result = new cv.Mat()
   cv.cvtColor(matchingImage, result, cv.COLOR_RGB2RGBA, 0)
